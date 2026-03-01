@@ -20,7 +20,7 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-client.once("clientReady", () => {
+client.once("ready", () => {
   console.log("Degen's BetBot connected to Sheets 🔥");
 });
 
