@@ -12,8 +12,9 @@ const client = new Client({
 // ΒΑΛΕ ΕΔΩ ΤΟ SPREADSHEET ID
 const SPREADSHEET_ID = "1tyha74-xdSq7rF3zF2qVFPz8_KE2tZMhb8m3vWpaY_k";
 
+const credsString = process.env.GOOGLE_CREDENTIALS.replace(/\n/g, '\\n');
 const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS.replace(/\\n/g, '\n')),
+  credentials: JSON.parse(credsString),
   scopes: ["https://www.googleapis.com/auth/spreadsheets"]
 });
 
