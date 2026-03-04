@@ -39,7 +39,7 @@ client.on("messageCreate", async (message) => {
     const rest = content.substring(secondSpace + 1).trim();
     
     // Χωρίζουμε το υπόλοιπο με -
-    const parts = rest.split("-").map(p => p.trim());
+    const parts = rest.split(" - ").map(p => p.trim());
     
     if (parts.length !== 3) {
       return message.reply("❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 26/05 23:30 Boca Juniors v River Plate - Di Maria 2+ Shots on Target - 1.90`");
@@ -61,7 +61,7 @@ client.on("messageCreate", async (message) => {
       range: "ironroukos!A:F",
       valueInputOption: "RAW",
       requestBody: {
-        values: [[timestamp, date, time, event, pick, odds]]
+        values: [[timestamp, `${date} ${time}`, event, pick, odds]]
       }
     });
 
