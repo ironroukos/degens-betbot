@@ -42,7 +42,7 @@ client.on("messageCreate", async (message) => {
     const parts = rest.split(" - ").map(p => p.trim());
     
     if (parts.length !== 3) {
-      return message.reply("❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 26/05 23:30 Boca Juniors v River Plate - Di Maria 2+ Shots on Target - 1.90`");
+      return message.reply("❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 04/03 21:30 Aston Villa v Chelsea - Rogers 2+ Shots on Target - 3.10`");
     }
     
     const event = parts[0];
