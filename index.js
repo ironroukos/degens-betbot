@@ -19,7 +19,6 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-// Κρατάμε τα pending bets σε memory
 const pendingBets = new Map();
 
 function parseBet(content) {
@@ -43,6 +42,35 @@ function parseBet(content) {
   return { date, time, event, pick, odds };
 }
 
+async function lockBet(messageId) {
+  const pending = pendingBets.get(messageId);
+  if (!pending) return;
+
+  pendingBets.delete(messageId);
+
+  const { bet, message } = pending;
+
+  try {
+    const timestamp = new Date().toLocaleString("el-GR");
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${message.channel.name}!A:F`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[timestamp, `${bet.date} ${bet.time}`, bet.event, bet.pick, bet.odds]]
+      }
+    });
+
+    await message.reactions.cache.get("⏳")?.remove();
+    await message.react("🔒");
+    await message.reply(`✅ Bet καταχωρήθηκε!\n📅 ${bet.date} ⏰ ${bet.time}\n⚽ ${bet.event}\n🎯 ${bet.pick} @ ${bet.odds}`);
+
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 client.once("clientReady", () => {
   console.log("Degen's BetBot connected to Sheets 🔥");
 });
@@ -52,66 +80,44 @@ client.on("messageCreate", async (message) => {
   if (!message.content.startsWith("!bet")) return;
 
   const bet = parseBet(message.content);
-  
+
   if (!bet) {
     return message.reply(
       "❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 26/05 23:30 Boca Juniors v River Plate - Di Maria 2+ Shots on Target - 1.90`"
     );
   }
 
-  // Βάζουμε ⏳ reaction και αποθηκεύουμε το bet
   await message.react("⏳");
-  pendingBets.set(message.id, { bet, message });
 
-  // Μετά από 60 δευτερόλεπτα κλειδώνουμε
-  setTimeout(async () => {
-    const pending = pendingBets.get(message.id);
-    if (!pending) return;
-
-    pendingBets.delete(message.id);
-
-    try {
-      const { bet, message: msg } = pending;
-      const timestamp = new Date().toLocaleString("el-GR");
-
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: "ironroukos!A:F",
-        valueInputOption: "RAW",
-        requestBody: {
-          values: [[timestamp, `${bet.date} ${bet.time}`, bet.event, bet.pick, bet.odds]]
-        }
-      });
-
-      // Αφαιρούμε ⏳ και βάζουμε 🔒
-      await msg.reactions.cache.get("⏳")?.remove();
-      await msg.react("🔒");
-
-    } catch (error) {
-      console.error(error);
-    }
-  }, 60000);
+  const timeout = setTimeout(() => lockBet(message.id), 26000);
+  pendingBets.set(message.id, { bet, message, timeout, edited: false });
 });
 
-// Αν γίνει edit μέσα στο 1 λεπτό, ανανεώνουμε το bet
 client.on("messageUpdate", async (oldMessage, newMessage) => {
-  if (!pendingBets.has(newMessage.id)) return;
+  const pending = pendingBets.get(newMessage.id);
+  if (!pending) return;
   if (newMessage.author?.bot) return;
   if (!newMessage.content?.startsWith("!bet")) return;
 
-  const newBet = parseBet(newMessage.content);
+  // Μόνο μια φορά reset
+  if (pending.edited) return;
 
+  const newBet = parseBet(newMessage.content);
   if (!newBet) {
     await newMessage.reply("❌ Το edit έχει λάθος format, το παλιό bet παραμένει.");
     return;
   }
 
-  // Ανανεώνουμε το bet με το νέο περιεχόμενο
-  const existing = pendingBets.get(newMessage.id);
-  existing.bet = newBet;
-  pendingBets.set(newMessage.id, existing);
-
-  await newMessage.react("✏️");
+  // Reset timer και ανανέωση bet
+  clearTimeout(pending.timeout);
+  const newTimeout = setTimeout(() => lockBet(newMessage.id), 26000);
+  
+  pendingBets.set(newMessage.id, {
+    bet: newBet,
+    message: pending.message,
+    timeout: newTimeout,
+    edited: true
+  });
 });
 
 client.login(process.env.DISCORD_TOKEN);
