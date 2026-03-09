@@ -58,7 +58,7 @@ async function lockBet(messageId) {
       range: `${message.channel.name}!A:F`,
       valueInputOption: "RAW",
       requestBody: {
-        values: [[timestamp, `${bet.date} ${bet.time}`, bet.event, bet.pick, bet.odds]]
+        values: [[timestamp, `${bet.date} ${bet.time}`, bet.event, bet.pick, bet.odds, "Pending"]]
       }
     });
 
