@@ -1,15 +1,18 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, Partials } = require("discord.js");
 const { google } = require("googleapis");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions
+  ],
+  partials: [Partials.Message, Partials.Reaction, Partials.User]
 });
 
 const SPREADSHEET_ID = "1tyha74-xdSq7rF3zF2qVFPz8_KE2tZMhb8m3vWpaY_k";
+const ADMINS = ["776158830445985813", "508029101341147136"];
 
 const credsString = process.env.GOOGLE_CREDENTIALS.replace(/\n/g, '\\n');
 const auth = new google.auth.GoogleAuth({
@@ -18,34 +21,25 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const sheets = google.sheets({ version: "v4", auth });
-
 const pendingBets = new Map();
 
 function parseBet(content) {
   const cleaned = content.replace("!bet", "").trim();
-  
   const firstSpace = cleaned.indexOf(" ");
   const secondSpace = cleaned.indexOf(" ", firstSpace + 1);
-  
   const date = cleaned.substring(0, firstSpace).trim();
   const time = cleaned.substring(firstSpace + 1, secondSpace).trim();
   const rest = cleaned.substring(secondSpace + 1).trim();
-  
   const parts = rest.split(" - ").map(p => p.trim());
-  
   if (parts.length !== 3) return null;
-  
   const [event, pick, odds] = parts;
-  
   if (isNaN(parseFloat(odds))) return null;
-  
   return { date, time, event, pick, odds };
 }
 
 async function lockBet(messageId) {
   const pending = pendingBets.get(messageId);
   if (!pending) return;
-
   pendingBets.delete(messageId);
 
   const { bet, message } = pending;
@@ -55,10 +49,10 @@ async function lockBet(messageId) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${message.channel.name}!A:F`,
+      range: `${message.channel.name}!A:H`,
       valueInputOption: "RAW",
       requestBody: {
-        values: [[timestamp, `${bet.date} ${bet.time}`, bet.event, bet.pick, bet.odds, "Pending"]]
+        values: [[timestamp, `${bet.date} ${bet.time}`, bet.event, bet.pick, bet.odds, "Pending", "", message.id]]
       }
     });
 
@@ -69,6 +63,19 @@ async function lockBet(messageId) {
   } catch (error) {
     console.error(error);
   }
+}
+
+async function findRowByMessageId(sheetName, messageId) {
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!H:H`
+  });
+
+  const rows = response.data.values || [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][0] === messageId) return i + 1; // 1-indexed
+  }
+  return null;
 }
 
 client.once("clientReady", () => {
@@ -83,12 +90,11 @@ client.on("messageCreate", async (message) => {
 
   if (!bet) {
     return message.reply(
-      "❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 04/03 21:30 Aston Villa v Chelsea - Rogers 2+ Shots on Target - 3.10`"
+      "❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 26/05 23:30 Boca Juniors v River Plate - Di Maria 2+ Shots on Target - 1.90`"
     );
   }
 
   await message.react("⏳");
-
   const timeout = setTimeout(() => lockBet(message.id), 26000);
   pendingBets.set(message.id, { bet, message, timeout, edited: false });
 });
@@ -98,8 +104,6 @@ client.on("messageUpdate", async (oldMessage, newMessage) => {
   if (!pending) return;
   if (newMessage.author?.bot) return;
   if (!newMessage.content?.startsWith("!bet")) return;
-
-  // Μόνο μια φορά reset
   if (pending.edited) return;
 
   const newBet = parseBet(newMessage.content);
@@ -108,16 +112,44 @@ client.on("messageUpdate", async (oldMessage, newMessage) => {
     return;
   }
 
-  // Reset timer και ανανέωση bet
   clearTimeout(pending.timeout);
   const newTimeout = setTimeout(() => lockBet(newMessage.id), 26000);
-  
   pendingBets.set(newMessage.id, {
     bet: newBet,
     message: pending.message,
     timeout: newTimeout,
     edited: true
   });
+});
+
+client.on("messageReactionAdd", async (reaction, user) => {
+  if (user.bot) return;
+  if (!ADMINS.includes(user.id)) return;
+  if (!["✅", "❌"].includes(reaction.emoji.name)) return;
+
+  try {
+    const message = reaction.message;
+    const sheetName = message.channel.name;
+    const rowIndex = await findRowByMessageId(sheetName, message.id);
+
+    if (!rowIndex) return;
+
+    const result = reaction.emoji.name === "✅" ? "Won" : "Lost";
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!F${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[result]]
+      }
+    });
+
+    await message.reply(`${reaction.emoji.name === "✅" ? "🟢" : "🔴"} Bet marked as **${result}**!`);
+
+  } catch (error) {
+    console.error(error);
+  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
