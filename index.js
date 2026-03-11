@@ -97,13 +97,40 @@ client.on("messageCreate", async (message) => {
     );
   }
 
-  // Unix timestamp 26 δευτερόλεπτα από τώρα
-  const lockTime = Math.floor(Date.now() / 1000) + 60;
-  
-  const countdownMessage = await message.reply(`🔓 Bet ανοιχτό για διόρθωση — κλειδώνει <t:${lockTime}:R>`);
+  const sendTime = Date.now();
+  const countdownMessage = await message.reply(`🔓 Bet ανοιχτό για διόρθωση — κλειδώνει σε 20 δευτερόλεπτα`);
+  const timeout = setTimeout(() => lockBet(message.id), 20000);
+  pendingBets.set(message.id, { bet, message, countdownMessage, timeout, sendTime, edited: false });
+});
 
-  const timeout = setTimeout(() => lockBet(message.id), 60000);
-  pendingBets.set(message.id, { bet, message, countdownMessage, timeout });
+client.on("messageUpdate", async (oldMessage, newMessage) => {
+  const pending = pendingBets.get(newMessage.id);
+  if (!pending) return;
+  if (newMessage.author?.bot) return;
+  if (!newMessage.content?.startsWith("!bet")) return;
+  if (pending.edited) return;
+
+  const newBet = parseBet(newMessage.content);
+  if (!newBet) {
+    await newMessage.reply("❌ Το edit έχει λάθος format, το παλιό bet παραμένει.");
+    return;
+  }
+
+  // Υπολογίζουμε πόσος χρόνος έχει περάσει από το send
+  const elapsed = Date.now() - pending.sendTime;
+  const remaining = 60000 - elapsed;
+
+  clearTimeout(pending.timeout);
+  const newTimeout = setTimeout(() => lockBet(newMessage.id), remaining);
+
+  await pending.countdownMessage.edit(`🔓 Bet επεξεργάστηκε — κλειδώνει σε ${Math.round(remaining / 1000)} δευτερόλεπτα`);
+
+  pendingBets.set(newMessage.id, {
+    ...pending,
+    bet: newBet,
+    timeout: newTimeout,
+    edited: true
+  });
 });
 
 client.on("messageReactionAdd", async (reaction, user) => {
