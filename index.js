@@ -98,11 +98,11 @@ client.on("messageCreate", async (message) => {
   }
 
   // Unix timestamp 26 δευτερόλεπτα από τώρα
-  const lockTime = Math.floor(Date.now() / 1000) + 26;
+  const lockTime = Math.floor(Date.now() / 1000) + 60;
   
   const countdownMessage = await message.reply(`🔓 Bet ανοιχτό για διόρθωση — κλειδώνει <t:${lockTime}:R>`);
 
-  const timeout = setTimeout(() => lockBet(message.id), 26000);
+  const timeout = setTimeout(() => lockBet(message.id), 60000);
   pendingBets.set(message.id, { bet, message, countdownMessage, timeout });
 });
 
