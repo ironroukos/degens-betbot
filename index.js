@@ -66,7 +66,7 @@ async function lockBet(messageId) {
           bet.pick,
           bet.odds,
           "Pending",
-          `=IF(F${rowNumber}="Won",E${rowNumber}-1,IF(F${rowNumber}="Lost",-1,0))`,
+          `=IF(F${rowNumber}="Won",(E${rowNumber}-1)*10,IF(F${rowNumber}="Lost",-10,0))`
           message.id
         ]]
       }
