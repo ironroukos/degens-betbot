@@ -42,12 +42,11 @@ async function lockBet(messageId) {
   if (!pending) return;
   pendingBets.delete(messageId);
 
-  const { bet, message } = pending;
+  const { bet, message, countdownMessage } = pending;
 
   try {
-   const timestamp = new Date().toLocaleString("el-GR", { timeZone: "Europe/Athens", hour12: false });
+    const timestamp = new Date().toLocaleString("el-GR", { timeZone: "Europe/Athens", hour12: false });
 
-    // Πρώτα βρίσκουμε πόσες γραμμές υπάρχουν για να ξέρουμε το row number
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${message.channel.name}!A:A`
@@ -72,26 +71,14 @@ async function lockBet(messageId) {
       }
     });
 
-    await message.reactions.cache.get("⏳")?.remove();
+    // Αφαιρούμε το countdown μήνυμα και βάζουμε 🔒
+    await countdownMessage.delete();
     await message.react("🔒");
     await message.reply(`✅ Bet καταχωρήθηκε!\n📅 ${bet.date} ⏰ ${bet.time}\n⚽ ${bet.event}\n🎯 ${bet.pick} @ ${bet.odds}`);
 
   } catch (error) {
     console.error(error);
   }
-}
-
-async function findRowByMessageId(sheetName, messageId) {
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!H:H`
-  });
-
-  const rows = response.data.values || [];
-  for (let i = 0; i < rows.length; i++) {
-    if (rows[i][0] === messageId) return i + 1; // 1-indexed
-  }
-  return null;
 }
 
 client.once("clientReady", () => {
@@ -110,32 +97,13 @@ client.on("messageCreate", async (message) => {
     );
   }
 
-  await message.react("⏳");
+  // Unix timestamp 26 δευτερόλεπτα από τώρα
+  const lockTime = Math.floor(Date.now() / 1000) + 26;
+  
+  const countdownMessage = await message.reply(`🔓 Bet ανοιχτό για διόρθωση — κλειδώνει <t:${lockTime}:R>`);
+
   const timeout = setTimeout(() => lockBet(message.id), 26000);
-  pendingBets.set(message.id, { bet, message, timeout, edited: false });
-});
-
-client.on("messageUpdate", async (oldMessage, newMessage) => {
-  const pending = pendingBets.get(newMessage.id);
-  if (!pending) return;
-  if (newMessage.author?.bot) return;
-  if (!newMessage.content?.startsWith("!bet")) return;
-  if (pending.edited) return;
-
-  const newBet = parseBet(newMessage.content);
-  if (!newBet) {
-    await newMessage.reply("❌ Το edit έχει λάθος format, το παλιό bet παραμένει.");
-    return;
-  }
-
-  clearTimeout(pending.timeout);
-  const newTimeout = setTimeout(() => lockBet(newMessage.id), 26000);
-  pendingBets.set(newMessage.id, {
-    bet: newBet,
-    message: pending.message,
-    timeout: newTimeout,
-    edited: true
-  });
+  pendingBets.set(message.id, { bet, message, countdownMessage, timeout });
 });
 
 client.on("messageReactionAdd", async (reaction, user) => {
@@ -167,5 +135,18 @@ client.on("messageReactionAdd", async (reaction, user) => {
     console.error(error);
   }
 });
+
+async function findRowByMessageId(sheetName, messageId) {
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!H:H`
+  });
+
+  const rows = response.data.values || [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][0] === messageId) return i + 1;
+  }
+  return null;
+}
 
 client.login(process.env.DISCORD_TOKEN);
