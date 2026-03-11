@@ -45,7 +45,7 @@ async function lockBet(messageId) {
   const { bet, message } = pending;
 
   try {
-    const timestamp = new Date().toLocaleString("el-GR", { timeZone: "Europe/Athens" });
+   const timestamp = new Date().toLocaleString("el-GR", { timeZone: "Europe/Athens", hour12: false });
 
     // Πρώτα βρίσκουμε πόσες γραμμές υπάρχουν για να ξέρουμε το row number
     const response = await sheets.spreadsheets.values.get({
