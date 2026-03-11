@@ -45,14 +45,30 @@ async function lockBet(messageId) {
   const { bet, message } = pending;
 
   try {
-    const timestamp = new Date().toLocaleString("el-GR");
+    const timestamp = new Date().toLocaleString("el-GR", { timeZone: "Europe/Athens" });
+
+    // Πρώτα βρίσκουμε πόσες γραμμές υπάρχουν για να ξέρουμε το row number
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${message.channel.name}!A:A`
+    });
+    const rowNumber = (response.data.values || []).length + 1;
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${message.channel.name}!A:H`,
-      valueInputOption: "RAW",
+      valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [[timestamp, `${bet.date} ${bet.time}`, bet.event, bet.pick, bet.odds, "Pending", "", message.id]]
+        values: [[
+          timestamp,
+          `${bet.date} ${bet.time}`,
+          bet.event,
+          bet.pick,
+          bet.odds,
+          "Pending",
+          `=IF(F${rowNumber}="Won",E${rowNumber}-1,IF(F${rowNumber}="Lost",-1,0))`,
+          message.id
+        ]]
       }
     });
 
