@@ -93,7 +93,7 @@ client.on("messageCreate", async (message) => {
 
   if (!bet) {
     return message.reply(
-      "❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 26/05 23:30 Boca Juniors v River Plate - Di Maria 2+ Shots on Target - 1.90`"
+      "❌ Λάθος format! Χρησιμοποίησε:\n`!bet DD/MM HH:MM event - pick - odds`\nΠχ: `!bet 01/03 19:30 Arsenal v Chelsea - Arsenal to Win - 1.90`"
     );
   }
 
